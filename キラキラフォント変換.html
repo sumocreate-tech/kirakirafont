@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>キラキラフォント変換</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts (Inter & Noto Sans JP) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #FAFAFA;
+            color: #171717;
+            font-family: 'Inter', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        /* カードタップ時の滑らかなフィードバック */
+        .font-card {
+            transition: transform 0.12s ease, background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .font-card:active {
+            transform: scale(0.992);
+        }
+    </style>
+</head>
+<body class="min-h-screen py-12 sm:py-20 px-4 sm:px-6 selection:bg-neutral-200 selection:text-neutral-900">
+
+    <!-- トースト通知（画面下部中央） -->
+    <div id="toast" class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 transition-all duration-200 opacity-0 translate-y-2 pointer-events-none">
+        <div class="bg-neutral-900 text-white px-5 py-2.5 rounded-full text-sm font-medium shadow-lg tracking-wide">
+            コピー完了 ✓
+        </div>
+    </div>
+
+    <!-- メインコンテナ（最大幅680px、中央配置） -->
+    <main class="max-w-[680px] mx-auto text-center">
+        
+        <!-- ヘッダー -->
+        <header class="mb-8 sm:mb-10">
+            <h1 class="text-[1.5rem] leading-tight font-semibold tracking-tight text-neutral-900">
+                キラキラフォント変換
+            </h1>
+            <p class="text-sm text-neutral-500 mt-2">
+                英語を入力して、気になるフォントをタップでコピー
+            </p>
+        </header>
+
+        <!-- 入力フィールド（中央揃え・大きめフォント） -->
+        <div class="relative mb-8 sm:mb-10">
+            <input 
+                id="input-text" 
+                type="text" 
+                value="Sparkle Font"
+                placeholder="英語を入力 (例: Sparkle Font)"
+                autocomplete="off"
+                spellcheck="false"
+                class="w-full bg-white border border-[#E5E7EB] focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 rounded-2xl px-[44px] py-[16px] text-[1.25rem] text-center text-neutral-900 placeholder-neutral-300 outline-none transition-all shadow-[0_1px_3px_rgba(0,0,0,0.03)]"
+            >
+            <!-- クリア（×）ボタン -->
+            <button 
+                id="clear-btn" 
+                type="button" 
+                aria-label="入力をクリア"
+                class="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-full text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors cursor-pointer"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+
+        <!-- 変換結果リスト（中央揃えカード） -->
+        <div id="results-container" class="space-y-3.5">
+            <!-- JSでカードを生成 -->
+        </div>
+
+        <!-- フッター注記 -->
+        <footer class="mt-10 text-center">
+            <p class="text-xs text-neutral-400">
+                ※ 半角英数字（A-Z, a-z, 0-9）が飾り文字に変換されます
+            </p>
+        </footer>
+
+    </main>
+
+    <script>
+        /**
+         * Unicode文字変換マッピング定義
+         */
+        const NORMAL_UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        const NORMAL_LOWER = "abcdefghijklmnopqrstuvwxyz";
+        const NORMAL_NUM   = "0123456789";
+
+        const FONT_MAPS = {
+            boldScript: {
+                upper: "𝓐𝓑𝓒𝓓𝓔𝓕𝓖𝓗𝓘𝓙𝓚𝓛𝓜𝓝𝓞𝓟𝓠𝓡𝓢𝓣𝓤𝓥𝓦𝓧𝓨𝓩",
+                lower: "𝓪𝓫𝓬𝓭𝓮𝓯𝓰𝓱𝓲𝓳𝓴𝓵𝓶𝓷𝓸𝓹𝓺𝓻𝓼𝓽𝓾𝓿𝔀𝔁𝔂𝔃",
+                num:   "𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗"
+            },
+            script: {
+                upper: "𝒜ℬ𝒞𝒟ℰℱ𝒢ℋℐ𝒥𝒦ℒℳ𝒩𝒪𝒫𝒬ℛ𝒮𝒯𝒰𝒱𝒲𝒳𝒴𝒵",
+                lower: "𝒶𝒷𝒸𝒹ℯ𝒻ℊ𝒽𝒾𝒿𝓀𝓁𝓂𝓃ℴ𝓅𝓆𝓇𝓈𝓉𝓊𝓋𝓌𝓍𝓎𝓏",
+                num:   "0123456789"
+            },
+            boldFraktur: {
+                upper: "𝕬𝕭𝕮𝕯𝕰𝕱𝕲𝕳𝕴𝕵𝕶𝕷𝕸𝕹𝕺𝕻𝕼𝕽𝕾𝕿𝖀𝖁𝖂𝖃𝖄𝖅",
+                lower: "𝖆𝖇𝖈𝖉𝖊𝖋𝖌𝖍𝖎𝖏𝖐𝖑𝖒𝖓𝖔𝖕𝖖𝖗𝖘𝖙𝖚𝖛𝖜𝖝𝖞𝖟",
+                num:   "𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗"
+            },
+            fraktur: {
+                upper: "𝔄𝔅ℭ𝔇𝔈𝔉𝔊ℌℑ𝔍𝔎𝔏𝔐𝔑𝔒𝔓𝔔ℜ𝔖𝔗𝔘𝔙𝔚𝔛𝔜ℨ",
+                lower: "𝔞𝔟𝔠𝔡𝔢𝔣𝔤𝔥𝔦𝔧𝔨𝔩𝔪𝔫𝔬𝔭𝔮𝔯𝔰𝔱𝔲𝔳𝔴𝔵𝔶𝔷",
+                num:   "0123456789"
+            },
+            doubleStruck: {
+                upper: "𝔸𝔹ℂ𝔻𝔼𝔽𝔾ℍ𝕀𝕁𝕂𝕃𝕄ℕ𝕆ℙℚℝ𝕊𝕋𝕌𝕍𝕎𝕏𝕐ℤ",
+                lower: "𝕒𝕓𝕔𝕕𝕖𝕗𝕘𝕙𝕚𝕛𝕜𝕝𝕞𝕟𝕠𝕡𝕢𝕣𝕤𝕥𝕦𝕧𝕨𝕩𝕪𝕫",
+                num:   "𝟘𝟙𝟚𝟛𝟜𝟝𝟞𝟟𝟠𝟡"
+            },
+            circled: {
+                upper: "ⒶⒷⒸⒹⒺⒻⒼⒽⒾⒿⓀⓁⓂⓃⓄⓅⓆⓇⓈⓉⓊⓋⓌⓍⓎⓏ",
+                lower: "ⓐⓑⓒⓓⓔⓕⓖⓗⓘⓙⓚⓛⓜⓝⓞⓟⓠⓡⓢⓣⓤⓥⓦⓧⓨⓩ",
+                num:   "⓪①②③④⑤⑥⑦⑧⑨"
+            },
+            negativeCircled: {
+                upper: "🅐🅑🅒🅓🅔🅕🅖🅗🅘🅙🅚🅛🅜🅝🅞🅟🅠🅡🅢🅣🅤𝅥🅦🅧🅨🅩",
+                lower: "🅐🅑🅒🅓🅔🅕🅖🅗🅘🅙🅚🅛🅜🅝🅞🅟🅠🅡🅢🅣🅤𝅥🅦🅧🅨🅩",
+                num:   "⓿❶❷❸❹❺❻❼❽❾"
+            },
+            squared: {
+                upper: "🄰🄱🄲🄳🄴🄵🄶🄷🄸🄹🄺🄻🄼🄽🄾🄿🅀🅁🅂🅃🅄🅅🅆🅇🅈🅉",
+                lower: "🄰🄱🄲🄳🄴🄵🄶🄷🄸🄹🄺🄻🄼🄽🄾🄿🅀🅁🅂🅃🅄🅅🅆🅇🅈🅉",
+                num:   "0123456789"
+            },
+            smallCaps: {
+                upper: "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                lower: "ᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢ",
+                num:   "0123456789"
+            },
+            boldItalic: {
+                upper: "𝑨𝑩𝑪𝑫𝑬𝑭𝑮𝑯𝑰𝑱𝑲𝑳𝑴𝑵𝑶𝑷𝑸𝑹𝑺𝑻𝑼𝑽𝑾𝑿𝒀𝒁",
+                lower: "𝒂𝒃𝒄𝒅𝒆𝒇𝒈𝒉𝒊𝒋𝒌𝒍𝒎𝒏𝒐𝒑𝒒𝒓𝒔𝒕𝒖𝒗𝒘𝒙𝒚𝒛",
+                num:   "𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗"
+            },
+            sansBoldItalic: {
+                upper: "𝘼𝘽𝘾𝘿𝙀𝙁𝙂𝙃𝙄𝙅𝙆𝙇𝙈𝙉𝙊𝙋𝙌𝙍𝙎𝙏𝙐𝙑𝙒𝙓𝙔𝙕",
+                lower: "𝙖𝙗𝙘𝙙𝙚𝙛𝙜𝙝𝙞𝙟𝙠𝙡𝙢𝙣𝙤𝙥𝙦𝙧𝙨𝙩𝙪𝙫𝙬𝙭𝙮𝙯",
+                num:   "𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵"
+            },
+            fullwidth: {
+                upper: "ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ",
+                lower: "ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ",
+                num:   "０１２３４５６７８９"
+            },
+            monospace: {
+                upper: "𝙰𝙱𝙲𝙳𝙴𝙵𝙶𝙷𝙸𝙹𝙺𝙻𝙼𝙽𝙾𝙿𝚀𝚁𝚂𝚃𝚄𝚅𝚆𝚇𝚈𝚉",
+                lower: "𝚊𝚋𝚌𝚍𝚎𝚏𝚐𝚑𝚒𝚓𝚔𝚕𝚖𝚗𝚘𝚙𝚚𝚛𝚜𝚝𝚞𝚟𝚠𝚡𝚢𝚣",
+                num:   "𝟶𝟷𝟸𝟹𝟺𝟻𝟼𝟽𝟾𝟿"
+            }
+        };
+
+        /**
+         * サロゲートペアを考慮してUnicodeマップで文字列を変換する
+         */
+        function convertWithMap(text, mapKey) {
+            if (!text) return "";
+            const map = FONT_MAPS[mapKey];
+            if (!map) return text;
+
+            const upperArr = Array.from(map.upper);
+            const lowerArr = Array.from(map.lower);
+            const numArr   = Array.from(map.num);
+
+            return Array.from(text).map(char => {
+                const uIdx = NORMAL_UPPER.indexOf(char);
+                if (uIdx !== -1) return upperArr[uIdx];
+
+                const lIdx = NORMAL_LOWER.indexOf(char);
+                if (lIdx !== -1) return lowerArr[lIdx];
+
+                const nIdx = NORMAL_NUM.indexOf(char);
+                if (nIdx !== -1) return numArr[nIdx];
+
+                return char;
+            }).join("");
+        }
+
+        /**
+         * リストに表示する厳選18スタイル
+         */
+        const STYLES = [
+            { label: "キラキラ筆記体", transform: (t) => `✨ ${convertWithMap(t, 'boldScript')} ✨` },
+            { label: "流れ星デコ", transform: (t) => `☆.｡.:*・${convertWithMap(t, 'script')}・*:.｡.☆` },
+            { label: "リボンガーリー", transform: (t) => `୨୧ ˖* ${convertWithMap(t, 'smallCaps')} *˖ ୨୧` },
+            { label: "ゆめかわスター", transform: (t) => `⋆｡°✩ ${convertWithMap(t, 'boldItalic')} ✩°｡⋆` },
+            { label: "ハート白抜き", transform: (t) => `♡ ${convertWithMap(t, 'doubleStruck')} ♡` },
+            { label: "ダイヤスパークル", transform: (t) => `✧･ﾟ: *✧･ﾟ:* ${convertWithMap(t, 'script')} *:･ﾟ✧*:･ﾟ✧` },
+            { label: "クラウンデコ", transform: (t) => `♛ ${convertWithMap(t, 'boldFraktur')} ♛` },
+            { label: "太字筆記体", transform: (t) => convertWithMap(t, 'boldScript') },
+            { label: "筆記体", transform: (t) => convertWithMap(t, 'script') },
+            { label: "白抜き文字", transform: (t) => convertWithMap(t, 'doubleStruck') },
+            { label: "スモールキャップス", transform: (t) => convertWithMap(t, 'smallCaps') },
+            { label: "丸囲み", transform: (t) => convertWithMap(t, 'circled') },
+            { label: "黒丸囲み", transform: (t) => convertWithMap(t, 'negativeCircled') },
+            { label: "四角囲み", transform: (t) => convertWithMap(t, 'squared') },
+            { label: "太字ゴシック", transform: (t) => convertWithMap(t, 'boldFraktur') },
+            { label: "ゴシック体", transform: (t) => convertWithMap(t, 'fraktur') },
+            { label: "太字イタリック", transform: (t) => convertWithMap(t, 'boldItalic') },
+            { label: "サンセリフ斜体", transform: (t) => convertWithMap(t, 'sansBoldItalic') },
+            { label: "モノスペース", transform: (t) => convertWithMap(t, 'monospace') },
+            { label: "全角風", transform: (t) => convertWithMap(t, 'fullwidth') },
+            { label: "文字間キラキラ", transform: (t) => {
+                const chars = Array.from(convertWithMap(t, 'boldScript')).filter(c => c !== ' ');
+                return chars.length > 0 ? `✨${chars.join('✨')}✨` : "";
+            }}
+        ];
+
+        // DOM要素
+        const inputEl = document.getElementById("input-text");
+        const clearBtn = document.getElementById("clear-btn");
+        const resultsContainer = document.getElementById("results-container");
+        const toastEl = document.getElementById("toast");
+        let toastTimeout = null;
+
+        /**
+         * トースト通知を表示
+         */
+        function showToast() {
+            toastEl.classList.remove("opacity-0", "translate-y-2");
+            toastEl.classList.add("opacity-100", "translate-y-0");
+
+            if (toastTimeout) clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toastEl.classList.remove("opacity-100", "translate-y-0");
+                toastEl.classList.add("opacity-0", "translate-y-2");
+            }, 1800);
+        }
+
+        /**
+         * クリップボードへコピー（iFrame対応フォールバック）
+         */
+        function copyText(text, badgeEl) {
+            if (!text) return;
+
+            const temp = document.createElement("textarea");
+            temp.value = text;
+            temp.style.position = "fixed";
+            temp.style.left = "-9999px";
+            document.body.appendChild(temp);
+            temp.select();
+
+            try {
+                if (document.execCommand("copy")) {
+                    showToast();
+                    if (badgeEl) {
+                        badgeEl.textContent = "コピー完了 ✓";
+                        badgeEl.classList.add("bg-neutral-900", "text-white", "border-neutral-900");
+                        badgeEl.classList.remove("bg-neutral-50", "text-neutral-500", "border-[#E5E7EB]");
+                        setTimeout(() => {
+                            badgeEl.textContent = "コピー";
+                            badgeEl.classList.remove("bg-neutral-900", "text-white", "border-neutral-900");
+                            badgeEl.classList.add("bg-neutral-50", "text-neutral-500", "border-[#E5E7EB]");
+                        }, 1500);
+                    }
+                }
+            } catch (err) {
+                console.error("Copy failed:", err);
+            }
+            document.body.removeChild(temp);
+        }
+
+        /**
+         * 変換結果リストを描画（中央揃えレイアウト）
+         */
+        function renderList() {
+            const raw = inputEl.value;
+            const isEmpty = raw.trim() === "";
+            const target = isEmpty ? "Sparkle Font" : raw;
+
+            // クリアボタンの表示切り替え
+            clearBtn.style.display = raw.length > 0 ? "flex" : "none";
+
+            resultsContainer.innerHTML = "";
+
+            STYLES.forEach(style => {
+                const converted = style.transform(target);
+
+                const card = document.createElement("div");
+                card.className = "font-card bg-white border border-[#E5E7EB] hover:border-neutral-300 hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] rounded-2xl px-5 py-5 flex flex-col items-center justify-center text-center cursor-pointer group select-none";
+
+                // 上部：控えめなスタイル名キャプション
+                const labelDiv = document.createElement("div");
+                labelDiv.className = "text-[0.75rem] text-[#888888] tracking-wide mb-2";
+                labelDiv.textContent = style.label;
+
+                // 中央：大きく見やすい変換テキスト
+                const textDiv = document.createElement("div");
+                textDiv.className = `text-[1.25rem] sm:text-[1.35rem] break-all leading-relaxed px-2 ${isEmpty ? "text-neutral-400" : "text-neutral-900"}`;
+                textDiv.textContent = converted;
+
+                // 下部：シンプルなコピーバッジ
+                const copyBadge = document.createElement("span");
+                copyBadge.textContent = "コピー";
+                copyBadge.className = "mt-3 inline-block px-3.5 py-1 rounded-full text-xs font-medium bg-neutral-50 text-neutral-500 border border-[#E5E7EB] group-hover:border-neutral-300 group-hover:text-neutral-800 transition-colors";
+
+                // カード全体のクリックでコピー
+                card.addEventListener("click", () => {
+                    copyText(converted, copyBadge);
+                });
+
+                card.appendChild(labelDiv);
+                card.appendChild(textDiv);
+                card.appendChild(copyBadge);
+                resultsContainer.appendChild(card);
+            });
+        }
+
+        // イベント設定
+        inputEl.addEventListener("input", renderList);
+
+        clearBtn.addEventListener("click", () => {
+            inputEl.value = "";
+            inputEl.focus();
+            renderList();
+        });
+
+        // 初期描画
+        window.addEventListener("DOMContentLoaded", renderList);
+    </script>
+</body>
+</html>
